@@ -1,0 +1,9 @@
+models/*
+!models/.gitkeep
+balanced_csv/*
+!balanced_csv/.gitkeep
+plots/*
+!plots/.gitkeep
+venv
+.idea
+__pycache__
