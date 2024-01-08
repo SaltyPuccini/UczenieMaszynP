@@ -59,6 +59,20 @@ def balance_smogn_LDS(savedir, smogn_data: pd.DataFrame):
     return copied_data
 
 
+def balance_dist_smogn_LDS(savedir, dist_smogn_data: pd.DataFrame):
+    # We don't want to modify the passed data
+    # This time we want to use LDS on already modified, smogn_data
+    copied_data: pd.DataFrame = dist_smogn_data.copy()
+    weights = prepare_weights(dist_smogn_data)
+
+    # Calculated weights are added as penultimate column of the DF
+    copied_data.insert(len(copied_data.columns) - 1, 'W', weights)
+
+    # Dataframe is saved to .csv file
+    copied_data.to_csv(savedir + 'dist_smogn_LDS.csv', index=False)
+    return copied_data
+
+
 def plot_balanced_datasets(files, balanced_dict):
     for method in list(balanced_dict.keys()):
         for i in range(len(balanced_dict["NONE"])):
@@ -113,6 +127,11 @@ def create_balanced_datasets(dataset_dir: str):
             balanced_dict["DISTSMOGN"].append(balance_dist_smogn(savedir, data))
         else:
             balanced_dict["DISTSMOGN"].append(pd.read_csv(savedir + 'dist_smogn.csv'))
+
+        if not os.path.exists(savedir + 'dist_smogn_lds.csv'):
+            balanced_dict["DISTSMOGN + LDS"].append(balance_dist_smogn_LDS(savedir, data))
+        else:
+            balanced_dict["DISTSMOGN + LDS"].append(pd.read_csv(savedir + 'dist_smogn_LDS.csv'))
 
     plot_balanced_datasets(filenames, balanced_dict)
 
