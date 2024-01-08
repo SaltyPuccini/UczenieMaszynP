@@ -108,11 +108,17 @@ def main():
                     rmse_list.append(root_mean_squared_error(y_test, y_pred))
 
                     dump(model,
-                         os.path.join("models", f'model_{model_idx}_{data_name}_{data_idx}_fold_{fold_idx}.joblib'))
+                         os.path.join("models",
+                                      f'model_{model_idx}_{data_name}_{files[data_idx]}_fold_{fold_idx}.joblib'))
 
-                print(sum(mae_list) / len(mae_list))
-                print(sum(rmse_list) / len(rmse_list))
+                mean_mae = sum(mae_list) / len(mae_list)
+                mean_rmse = sum(rmse_list) / len(rmse_list)
+
+                with open('error_means.txt', 'a') as file:
+                    file.write(f'{model} --- {data_name} --- {files[data_idx]}')
+                    file.write(f"Mean MAE: {mean_mae}\n")
+                    file.write(f"Mean RMSE: {mean_rmse}\n\n")
 
 
 if __name__ == '__main__':
-    test()
+    main()
