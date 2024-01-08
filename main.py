@@ -7,6 +7,8 @@ from sklearn.metrics import root_mean_squared_error
 
 from sklearn.model_selection import RepeatedKFold
 from joblib import dump
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+
 from data_balance import create_balanced_datasets
 import os
 
@@ -96,6 +98,7 @@ def main():
                 rkf = RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
                 mae_list = []
                 rmse_list = []
+                score = []
                 runtime = 0
 
                 for fold_idx, (train_index, test_index) in enumerate(rkf.split(ready_data, ready_data.iloc[:, -1])):
@@ -105,32 +108,51 @@ def main():
                     y_train, y_test = ready_data.iloc[:, -1].iloc[train_index], ready_data.iloc[:, -1].iloc[test_index]
 
                     if np.any(weights):
-                        train_weights = weights[train_index]
-                        model.fit(X_train, y_train, train_weights)
-                    else:
-                        model.fit(X_train, y_train)
+                        if isinstance(model, MLPRegressor):
+                            model.fit(X_train, y_train)
+                            test_weights = weights[test_index]
+                            score.append(model.score(X_test, y_test, test_weights))
+                        else:
+                            train_weights = weights[train_index]
+                            model.fit(X_train, y_train, train_weights)
+                            y_pred = model.predict(X_test)
 
-                    y_pred = model.predict(X_test)
+                            mae_list.append(mean_absolute_error(y_test, y_pred))
+                            rmse_list.append(root_mean_squared_error(y_test, y_pred))
+                    else:
+                        if isinstance(model, MLPRegressor):
+                            model.fit(X_train, y_train)
+                            score.append(model.score(X_test, y_test))
+                        else:
+                            model.fit(X_train, y_train)
+                            y_pred = model.predict(X_test)
+
+                            mae_list.append(mean_absolute_error(y_test, y_pred))
+                            rmse_list.append(root_mean_squared_error(y_test, y_pred))
 
                     end_time = time.time()
                     runtime += (end_time - start_time)
 
-                    mae_list.append(mean_absolute_error(y_test, y_pred))
-                    rmse_list.append(root_mean_squared_error(y_test, y_pred))
-
                     dump(model,
                          os.path.join("models",
-                                      f'model_{model_idx}_{data_name}_{files[data_idx]}_fold_{fold_idx}.joblib'))
+                                      f'model_{model}_{data_name}_{files[data_idx]}_fold_{fold_idx}.joblib'))
 
-                mean_mae = sum(mae_list) / len(mae_list)
-                mean_rmse = sum(rmse_list) / len(rmse_list)
-                runtime = runtime / n_repeats
+                if not isinstance(model, MLPRegressor):
+                    mean_mae = sum(mae_list) / len(mae_list)
+                    mean_rmse = sum(rmse_list) / len(rmse_list)
+                    runtime = runtime / n_repeats
 
-                with open('error_means.txt', 'a') as file:
-                    file.write(f'{model} --- {data_name} --- {files[data_idx]}')
-                    file.write(f"Mean MAE: {mean_mae}\n")
-                    file.write(f"Mean RMSE: {mean_rmse}\n")
-                    file.write(f"Time: {runtime}\n\n")
+                    with open('error_means.txt', 'a') as file:
+                        file.write(f'{model} --- {data_name} --- {files[data_idx]}\n')
+                        file.write(f"Mean MAE: {mean_mae}\n")
+                        file.write(f"Mean RMSE: {mean_rmse}\n")
+                        file.write(f"Time: {runtime}\n\n")
+                else:
+                    mean_r2 = sum(score) / len(score)
+                    with open('error_means.txt', 'a') as file:
+                        file.write(f'{model} --- {data_name} --- {files[data_idx]}\n')
+                        file.write(f"Mean R2: {mean_r2}\n")
+                        file.write(f"Time: {runtime}\n\n")
 
 
 if __name__ == '__main__':
