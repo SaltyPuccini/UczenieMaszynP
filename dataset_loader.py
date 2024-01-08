@@ -23,3 +23,6 @@ def load_csvs(folder_path: str):
     return filenames, csvs
 
 
+def get_filenames(folder_path: str):
+    csv_filenames = [file for file in os.listdir(folder_path) if file.endswith('.csv')]
+    return csv_filenames

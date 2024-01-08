@@ -22,3 +22,24 @@ def initialize_regression_models():
             rf_models.append(rf_model)
 
     return svm_models + rf_models
+
+def test_regression_models():
+    svm_models = []
+    cost_values = [300]
+    gamma_values = [0.001]
+
+    for cost in cost_values:
+        for gamma in gamma_values:
+            svm_model = SVR(C=cost, gamma=gamma)
+            svm_models.append(svm_model)
+
+    rf_models = []
+    # mtry_values = [5]
+    # ntree_values = [200]
+    #
+    # for mtry in mtry_values:
+    #     for ntree in ntree_values:
+    #         rf_model = RandomForestRegressor(n_estimators=ntree, max_features=mtry)
+    #         rf_models.append(rf_model)
+
+    return svm_models + rf_models
