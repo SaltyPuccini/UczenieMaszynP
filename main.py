@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error
@@ -94,15 +96,24 @@ def main():
                 rkf = RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
                 mae_list = []
                 rmse_list = []
+                runtime = 0
+
                 for fold_idx, (train_index, test_index) in enumerate(rkf.split(ready_data, ready_data.iloc[:, -1])):
+                    start_time = time.time()
+
                     X_train, X_test = ready_data.iloc[train_index], ready_data.iloc[test_index]
                     y_train, y_test = ready_data.iloc[:, -1].iloc[train_index], ready_data.iloc[:, -1].iloc[test_index]
+
                     if np.any(weights):
                         train_weights = weights[train_index]
                         model.fit(X_train, y_train, train_weights)
                     else:
                         model.fit(X_train, y_train)
+
                     y_pred = model.predict(X_test)
+
+                    end_time = time.time()
+                    runtime += (end_time - start_time)
 
                     mae_list.append(mean_absolute_error(y_test, y_pred))
                     rmse_list.append(root_mean_squared_error(y_test, y_pred))
@@ -113,11 +124,13 @@ def main():
 
                 mean_mae = sum(mae_list) / len(mae_list)
                 mean_rmse = sum(rmse_list) / len(rmse_list)
+                runtime = runtime / n_repeats
 
                 with open('error_means.txt', 'a') as file:
                     file.write(f'{model} --- {data_name} --- {files[data_idx]}')
                     file.write(f"Mean MAE: {mean_mae}\n")
-                    file.write(f"Mean RMSE: {mean_rmse}\n\n")
+                    file.write(f"Mean RMSE: {mean_rmse}\n")
+                    file.write(f"Time: {runtime}\n\n")
 
 
 if __name__ == '__main__':
