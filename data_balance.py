@@ -1,113 +1,26 @@
 import os.path
-import smogn
-import pandas as pd
-from LDS import prepare_weights
-from dataset_loader import load_csvs
-from distSMOGN import distSMOGN
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
 
 
-def balance_dist_smogn(savedir, data: pd.DataFrame):
-    # We don't want to modify the passed data
-    copied_data: pd.DataFrame = data.copy()
-
-    # Last column of the DF is the target value
-    data_dist_smogn: pd.DataFrame = distSMOGN(data=copied_data, y=data.columns[-1])
-
-    # Dataframe is saved to .csv file
-    data_dist_smogn.to_csv(savedir + 'dist_smogn.csv', index=False)
-    return data_dist_smogn
-
-
-def balance_smogn(X_train, y_train):
-    copied_X: pd.DataFrame = X_train.copy()
-    copied_y: pd.DataFrame = y_train.copy()
-    data_smogn: pd.DataFrame = smogn.smoter(data=copied_X, y=copied_y)
-    return data_smogn
-
-
-def balance_LDS(savedir, data: pd.DataFrame):
-    # We don't want to modify the passed data
-    copied_data: pd.DataFrame = data.copy()
-    weights = prepare_weights(data)
-
-    # Calculated weights are added as penultimate column of the DF
-    copied_data.insert(len(copied_data.columns) - 1, 'W', weights)
-
-    # Dataframe is saved to .csv file
-    copied_data.to_csv(savedir + 'LDS.csv', index=False)
-    return copied_data
-
-
-def balance_smogn_LDS(savedir, smogn_data: pd.DataFrame):
-    # We don't want to modify the passed data
-    # This time we want to use LDS on already modified, smogn_data
-    copied_data: pd.DataFrame = smogn_data.copy()
-    weights = prepare_weights(smogn_data)
-
-    # Calculated weights are added as penultimate column of the DF
-    copied_data.insert(len(copied_data.columns) - 1, 'W', weights)
-
-    # Dataframe is saved to .csv file
-    copied_data.to_csv(savedir + 'smogn_LDS.csv', index=False)
-    return copied_data
-
-
-def balance_dist_smogn_LDS(savedir, dist_smogn_data: pd.DataFrame):
-    # We don't want to modify the passed data
-    # This time we want to use LDS on already modified, smogn_data
-    copied_data: pd.DataFrame = dist_smogn_data.copy()
-    weights = prepare_weights(dist_smogn_data)
-
-    # Calculated weights are added as penultimate column of the DF
-    copied_data.insert(len(copied_data.columns) - 1, 'W', weights)
-
-    # Dataframe is saved to .csv file
-    copied_data.to_csv(savedir + 'dist_smogn_LDS.csv', index=False)
-    return copied_data
-
-
-def plot_balanced_datasets(files, balanced_dict):
+def plot_balanced_datasets(dataset_name, balanced_dict, weights_dict, fold):
     for method in list(balanced_dict.keys()):
-        for i in range(len(balanced_dict["NONE"])):
-            result = balanced_dict[method][i].iloc[:, -1]
 
-            if method.__contains__("LDS"):
-                # questionable - should we really multiply it?
-                result = [a * b for a, b in
-                          zip(balanced_dict[method][i].iloc[:, -2], balanced_dict[method][i].iloc[:, -1])]
+        if method.__contains__("LDS"):
+            X = balanced_dict[method].iloc[:, -1].copy()
+            weights = weights_dict[method].copy()
 
-            sns.kdeplot(balanced_dict["NONE"][i].iloc[:, -1], label="Original")
-            sns.kdeplot(result, label="Modified")
-            plt.legend()
-            dataset_name = files[i][:-4] + "_"
-            plt.title(dataset_name + method)
-            plt.savefig(os.path.join("plots", dataset_name + method + "_plot.png"))
-            plt.close()
+            plt.hist(X, weights=weights, bins=20, alpha=0.5, color='red', label='Weighted distribution')
+            plt.hist(X, bins=20, alpha=0.5, color='green', label='Original distribution')
+            plt.title('Histogram z nakładaniem wag')
+            plt.xlabel('Wartość')
+            plt.ylabel('Skumulowana waga')
+        else:
+            sns.kdeplot(balanced_dict["None"].iloc[:, -1], label="Original")
+            sns.kdeplot(balanced_dict[method].iloc[:, -1], label="Modified")
 
-
-def create_balanced_datasets(data, filename):
-    balanced_dict = {
-        'NONE': [],
-        'SMOGN': [],
-        'LDS': [],
-        'SMOGN + LDS': [],
-        'DISTSMOGN': [],
-        'DISTSMOGN + LDS': [],
-    }
-
-    savedir = os.path.join("balanced_csv", filename)[:-len('.csv')]
-    balanced_dict['NONE'].append(data)
-
-    balanced_dict["SMOGN"].append(balance_smogn(data))
-
-    balanced_dict["LDS"].append(balance_LDS(savedir, data))
-
-    balanced_dict["SMOGN + LDS"].append(balance_smogn_LDS(savedir, balanced_dict["SMOGN"][0]))
-
-    balanced_dict["DISTSMOGN"].append(balance_dist_smogn(savedir, data))
-
-    balanced_dict["DISTSMOGN + LDS"].append(balance_dist_smogn_LDS(savedir, balanced_dict["DISTSMOGN"][0]))
-
-    return balanced_dict
+        plt.legend()
+        plt.title(f'{dataset_name} with {method} on fold {fold}')
+        plt.savefig(os.path.join("plots", dataset_name + "_" + method + "_" + str(fold) + "_plot.png"))
+        plt.close()

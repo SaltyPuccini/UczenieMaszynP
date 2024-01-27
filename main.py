@@ -8,14 +8,13 @@ from sklearn.metrics import root_mean_squared_error
 from sklearn.base import clone
 from sklearn.model_selection import RepeatedKFold
 from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import MinMaxScaler
 
 from LDS import prepare_weights
-from data_balance import create_balanced_datasets
+from data_balance import plot_balanced_datasets
 
 from dataset_loader import load_csvs
 from distSMOGN import distSMOGN
-from models_creator import initialize_regression_models, test_regression_models
+from models_creator import initialize_regression_models
 
 
 def main():
@@ -24,13 +23,13 @@ def main():
     files, data_list = load_csvs(DATASET_DIR)
     regression_models = initialize_regression_models()
 
-    n_splits = 2
-    n_repeats = 1
+    n_splits = 5
+    n_repeats = 2
     random_state = 0
 
-    smogn_config = {'threshold': 0.5, 'pert': 0.023, 'knn': 5, 'rel_coef': 1.3, 'undersampling': False}
+    smogn_config = {'threshold': 0.5, 'pert': 0.023, 'knn': 5, 'rel_coef': 1.3, 'undersampling': True}
     dist_smogn_config = {'threshold': 0.5, 'pert': 0.023, 'knn': 5, 'num_partitions': 2, 'rel_coef': 1.3,
-                         'undersampling': False}
+                         'undersampling': True}
 
     mae = np.zeros((len(files), len(regression_models), 6))
     rmse = np.zeros((len(files), len(regression_models), 6))
@@ -84,6 +83,8 @@ def main():
                 "DistSMOGN_LDS": prepare_weights(balanced_dict["DistSMOGN"].copy()),
             }
 
+            plot_balanced_datasets(files[i][:-len('.csv')], balanced_dict, weights_dict, fold_idx)
+
             for model_idx, model in enumerate(regression_models):
                 for balance_idx, (balance_type_name, data) in enumerate(balanced_dict.items()):
                     print(f"Training {model} on {balance_type_name}...")
@@ -97,11 +98,18 @@ def main():
                         current_model.fit(data.iloc[:, :-1], data.iloc[:, -1])
 
                     y_pred = current_model.predict(X_test)
-                    a = y_test
-                    print(mean_absolute_error(y_test, y_pred))
-                    print(root_mean_squared_error(y_test, y_pred))
-                    mae[i][model_idx][balance_idx] += mean_absolute_error(y_test, y_pred)
-                    rmse[i][model_idx][balance_idx] += root_mean_squared_error(y_test, y_pred)
+
+                    if balance_type_name.__contains__("LDS") and type(model) is MLPRegressor:
+                        weights = weights_dict[balance_type_name].copy()
+                        print(mean_absolute_error(y_test, y_pred, weights))
+                        print(root_mean_squared_error(y_test, y_pred, weights))
+                        mae[i][model_idx][balance_idx] += mean_absolute_error(y_test, y_pred, weights)
+                        rmse[i][model_idx][balance_idx] += root_mean_squared_error(y_test, y_pred, weights)
+                    else:
+                        print(mean_absolute_error(y_test, y_pred))
+                        print(root_mean_squared_error(y_test, y_pred))
+                        mae[i][model_idx][balance_idx] += mean_absolute_error(y_test, y_pred)
+                        rmse[i][model_idx][balance_idx] += root_mean_squared_error(y_test, y_pred)
 
     mae = mae / n_splits / n_repeats
     rmse = rmse / n_splits / n_repeats
