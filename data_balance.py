@@ -20,15 +20,10 @@ def balance_dist_smogn(savedir, data: pd.DataFrame):
     return data_dist_smogn
 
 
-def balance_smogn(savedir, data: pd.DataFrame):
-    # We don't want to modify the passed data
-    copied_data: pd.DataFrame = data.copy()
-
-    # Last column of the DF is the target value
-    data_smogn: pd.DataFrame = smogn.smoter(data=copied_data, y=copied_data.columns[-1])
-
-    # Dataframe is saved to .csv file
-    data_smogn.to_csv(savedir + 'smogn.csv', index=False)
+def balance_smogn(X_train, y_train):
+    copied_X: pd.DataFrame = X_train.copy()
+    copied_y: pd.DataFrame = y_train.copy()
+    data_smogn: pd.DataFrame = smogn.smoter(data=copied_X, y=copied_y)
     return data_smogn
 
 
@@ -92,7 +87,7 @@ def plot_balanced_datasets(files, balanced_dict):
             plt.close()
 
 
-def create_balanced_datasets(dataset_dir: str):
+def create_balanced_datasets(data, filename):
     balanced_dict = {
         'NONE': [],
         'SMOGN': [],
@@ -102,37 +97,17 @@ def create_balanced_datasets(dataset_dir: str):
         'DISTSMOGN + LDS': [],
     }
 
-    filenames, dataframes = load_csvs(dataset_dir)
+    savedir = os.path.join("balanced_csv", filename)[:-len('.csv')]
+    balanced_dict['NONE'].append(data)
 
-    for i, data in enumerate(dataframes):
-        savedir = os.path.join("balanced_csv", filenames[i])[:-len('.csv')]
-        balanced_dict['NONE'].append(data)
+    balanced_dict["SMOGN"].append(balance_smogn(data))
 
-        if not os.path.exists(savedir + 'smogn.csv'):
-            balanced_dict["SMOGN"].append(balance_smogn(savedir, data))
-        else:
-            balanced_dict["SMOGN"].append(pd.read_csv(savedir + 'smogn.csv'))
+    balanced_dict["LDS"].append(balance_LDS(savedir, data))
 
-        if not os.path.exists(savedir + 'LDS.csv'):
-            balanced_dict["LDS"].append(balance_LDS(savedir, data))
-        else:
-            balanced_dict["LDS"].append(pd.read_csv(savedir + 'LDS.csv'))
+    balanced_dict["SMOGN + LDS"].append(balance_smogn_LDS(savedir, balanced_dict["SMOGN"][0]))
 
-        if not os.path.exists(savedir + 'smogn_LDS.csv'):
-            balanced_dict["SMOGN + LDS"].append(balance_smogn_LDS(savedir, balanced_dict["SMOGN"][i]))
-        else:
-            balanced_dict["SMOGN + LDS"].append(pd.read_csv(savedir + 'smogn_LDS.csv'))
+    balanced_dict["DISTSMOGN"].append(balance_dist_smogn(savedir, data))
 
-        if not os.path.exists(savedir + 'dist_smogn.csv'):
-            balanced_dict["DISTSMOGN"].append(balance_dist_smogn(savedir, data))
-        else:
-            balanced_dict["DISTSMOGN"].append(pd.read_csv(savedir + 'dist_smogn.csv'))
-
-        if not os.path.exists(savedir + 'dist_smogn_lds.csv'):
-            balanced_dict["DISTSMOGN + LDS"].append(balance_dist_smogn_LDS(savedir, data))
-        else:
-            balanced_dict["DISTSMOGN + LDS"].append(pd.read_csv(savedir + 'dist_smogn_LDS.csv'))
-
-    plot_balanced_datasets(filenames, balanced_dict)
+    balanced_dict["DISTSMOGN + LDS"].append(balance_dist_smogn_LDS(savedir, balanced_dict["DISTSMOGN"][0]))
 
     return balanced_dict

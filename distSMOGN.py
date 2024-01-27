@@ -17,7 +17,10 @@ from smogn.over_sampling import over_sampling
 
 # Most of the code is copied from the smogn package, I just needed to add minor modifications
 # https://pypi.org/project/smogn/
-def distSMOGN(data, y, thresh=0.8, num_partitions=4, pert=0.02, k_neigh=5):
+def distSMOGN(data, y, thresh=0.8, num_partitions=2, pert=0.02, k_neigh=5, seed=None, under_sampling=True,
+              rel_method="auto",
+              rel_xtrm_type="both",
+              rel_coef=1.5, rel_ctrl_pts_rg=None):
     n = len(data)
     d = len(data.columns)
 
@@ -46,7 +49,15 @@ def distSMOGN(data, y, thresh=0.8, num_partitions=4, pert=0.02, k_neigh=5):
     y_sort = y.sort_values(by=d - 1)
     y_sort = y_sort[d - 1]
 
-    phi_params = phi_ctrl_pts(y=y_sort)
+    phi_params = phi_ctrl_pts(
+
+        y=y_sort,  ## y (ascending)
+        method=rel_method,  ## defaults "auto"
+        xtrm_type=rel_xtrm_type,  ## defaults "both"
+        coef=rel_coef,  ## defaults 1.5
+        ctrl_pts=rel_ctrl_pts_rg  ## user spec
+    )
+
     y_phi = phi(y=y_sort, ctrl_pts=phi_params)
 
     # determine bin (rare or normal) by bump classification
@@ -90,37 +101,36 @@ def distSMOGN(data, y, thresh=0.8, num_partitions=4, pert=0.02, k_neigh=5):
 
         # under-sampling
         if s_perc[i] < 1:
-            # drop observations in training set
-            # considered 'normal' (not 'rare')
-            omit_index = np.random.choice(
-                a=list(b_index[i].index),
-                size=int(s_perc[i] * len(b_index[i])),
-                replace=False
-            )
+            if under_sampling:
+                if seed:
+                    np.random.seed(seed=seed)
+                # drop observations in training set
+                # considered 'normal' (not 'rare')
+                omit_index = np.random.choice(
+                    a=list(b_index[i].index),
+                    size=int(s_perc[i] * len(b_index[i])),
+                    replace=False
+                )
 
-            omit_obs = data.drop(
-                index=omit_index,
-                axis=0
-            )
+                omit_obs = data.drop(
+                    index=omit_index,
+                    axis=0
+                )
 
-            # concatenate under-sampling
-            # results to modified training set
-            data_new = pd.concat([omit_obs, data_new])
+                # concatenate under-sampling
+                # results to modified training set
+                data_new = pd.concat([omit_obs, data_new])
+            else:
+                data_new = pd.concat([data.loc[b_index[i].index], data_new])
 
         # over-sampling
         if s_perc[i] > 1:
             # create dataset of under-represented entries
-            bins_r = pd.concat([data.iloc[b_index[i].index], bins_r])
+            bins_r = pd.concat([data.loc[b_index[i].index], bins_r])
             for index in b_index[i].index:
                 clustered_perc[index] = s_perc[i]
 
-    text_columns = bins_r.select_dtypes(include=['object']).columns.tolist()
-
     encoded_df = bins_r
-
-    if text_columns:
-        encoded_df = pd.get_dummies(bins_r, columns=text_columns, prefix='', prefix_sep='')
-        encoded_df.columns = range(len(encoded_df.columns))
 
     kmeans = KMeans(n_clusters=num_partitions)
     kmeans.fit(encoded_df)
@@ -135,7 +145,6 @@ def distSMOGN(data, y, thresh=0.8, num_partitions=4, pert=0.02, k_neigh=5):
 
         synth_obs = distSMOGN_over_sampling(
             data=data_subset,
-            index=list(data_subset.index),
             perc=most_common_value,
             pert=pert,
             k=k_neigh
@@ -165,7 +174,6 @@ def distSMOGN_over_sampling(
 
         # arguments / inputs
         data,  # training set
-        index,  # index of input data
         perc,  # over / under sampling
         pert,  # perturbation / noise percentage
         k  # num of neighs for over-sampling
@@ -527,10 +535,6 @@ def distSMOGN_over_sampling(
     # convert synthetic matrix to dataframe
     data_new = pd.DataFrame(synth_matrix)
 
-    # synthetic data quality check
-    if sum(data_new.isnull().sum()) > 0:
-        raise ValueError("oops! synthetic data contains missing values")
-
     # replace label encoded values with original values
     for j in feat_list_nom:
         code_list = data.iloc[:, j].unique()
@@ -556,6 +560,10 @@ def distSMOGN_over_sampling(
     for j in feat_non_neg:
         # data_new.iloc[:, j][data_new.iloc[:, j] < 0] = 0
         data_new.iloc[:, j] = data_new.iloc[:, j].clip(lower=0)
+
+    # synthetic data quality check
+    if sum(data_new.isnull().sum()) > 0:
+        data_new = data_new.dropna()
 
     # return over-sampling results dataframe
     return data_new
