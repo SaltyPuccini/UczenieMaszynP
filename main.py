@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import smogn
 from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import root_mean_squared_error, r2_score
 from sklearn.base import clone
 from sklearn.model_selection import RepeatedKFold
 from sklearn.neural_network import MLPRegressor
@@ -27,12 +27,13 @@ def main():
     n_repeats = 2
     random_state = 0
 
-    smogn_config = {'threshold': 0.5, 'pert': 0.023, 'knn': 5, 'rel_coef': 1.3, 'undersampling': True}
+    smogn_config = {'threshold': 0.5, 'pert': 0.023, 'knn': 5, 'rel_coef': 1.3, 'undersampling': False}
     dist_smogn_config = {'threshold': 0.5, 'pert': 0.023, 'knn': 5, 'num_partitions': 2, 'rel_coef': 1.3,
-                         'undersampling': True}
+                         'undersampling': False}
 
     mae = np.zeros((len(files), len(regression_models), 6))
     rmse = np.zeros((len(files), len(regression_models), 6))
+    r2 = np.zeros((len(files), len(regression_models), 6))
 
     for i, dataframe in enumerate(data_list):
         curr_dataframe = dataframe.copy()
@@ -98,29 +99,28 @@ def main():
                         current_model.fit(data.iloc[:, :-1], data.iloc[:, -1])
 
                     y_pred = current_model.predict(X_test)
-
-                    if balance_type_name.__contains__("LDS") and type(model) is MLPRegressor:
-                        weights = weights_dict[balance_type_name].copy()
-                        print(mean_absolute_error(y_test, y_pred, weights))
-                        print(root_mean_squared_error(y_test, y_pred, weights))
-                        mae[i][model_idx][balance_idx] += mean_absolute_error(y_test, y_pred, weights)
-                        rmse[i][model_idx][balance_idx] += root_mean_squared_error(y_test, y_pred, weights)
-                    else:
-                        print(mean_absolute_error(y_test, y_pred))
-                        print(root_mean_squared_error(y_test, y_pred))
-                        mae[i][model_idx][balance_idx] += mean_absolute_error(y_test, y_pred)
-                        rmse[i][model_idx][balance_idx] += root_mean_squared_error(y_test, y_pred)
+                    print(mean_absolute_error(y_test, y_pred))
+                    print(root_mean_squared_error(y_test, y_pred))
+                    print(r2_score(y_test, y_pred))
+                    mae[i][model_idx][balance_idx] += mean_absolute_error(y_test, y_pred)
+                    rmse[i][model_idx][balance_idx] += root_mean_squared_error(y_test, y_pred)
+                    r2[i][model_idx][balance_idx] += r2_score(y_test, y_pred)
 
     mae = mae / n_splits / n_repeats
     rmse = rmse / n_splits / n_repeats
+    r2 = r2 / n_splits / n_repeats
 
     for dataset in range(mae.shape[0]):
         for model in range(mae.shape[1]):
             for i in range(mae.shape[2]):
-                with open('last_test.txt', 'a') as file:
+                with open('NN-results.txt', 'a') as file:
                     file.write(f'{files[dataset]} --- {regression_models[model]} --- {balance_names[i]}\n')
-                    file.write(f"Mean MAE: {mae[dataset][model][i]}\n")
-                    file.write(f"Mean RMSE: {rmse[dataset][model][i]}\n")
+                    if type(model) is MLPRegressor:
+                        file.write(f"Mean R2: {r2[dataset][model][i]}\n")
+                    else:
+                        file.write(f"Mean MAE: {mae[dataset][model][i]}\n")
+                        file.write(f"Mean RMSE: {rmse[dataset][model][i]}\n")
+                        file.write(f"Mean R2: {r2[dataset][model][i]}\n")
 
 
 if __name__ == '__main__':
